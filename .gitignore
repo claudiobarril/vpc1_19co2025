@@ -174,3 +174,6 @@ cython_debug/
 .pypirc
 
 vpc1/
+
+.idea/
+.DS_Store
