@@ -27,4 +27,3 @@ visualizarlas.
 2. Elija el número de bins que crea conveniente y grafique su histograma, compare los histogramas
 entre sí. Explicar lo que se observa, si tuviera que entrenar un modelo de clasificación/detección
 de imágenes, ¿considera que puede ser de utilidad tomar como ‘features’ a los histogramas?
-3. 
