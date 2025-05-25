@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 
 
-def show_image(image, title=''):
+def show_image(image, title=""):
     """
     Muestra una imagen en una celda usando matplotlib.
 
@@ -20,10 +20,50 @@ def show_image(image, title=''):
         imagen_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         plt.imshow(imagen_rgb)
     else:
-        plt.imshow(image, cmap='gray')
+        plt.imshow(image, cmap="gray")
     plt.title(title)
-    plt.axis('off')
+    plt.axis("off")
     plt.show()
+
+
+def show_frame(
+    video_path: str,
+    frame_target: int,
+    *,
+    to_gray: bool = False,
+) -> np.ndarray:
+    cap = cv.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"No se pudo abrir {video_path!r}")
+
+    total = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+    if frame_target < 0 or frame_target >= total:
+        cap.release()
+        raise ValueError(f"Frame index {frame_target} Fuera de rango (0-{total-1})")
+
+    cap.set(cv.CAP_PROP_POS_FRAMES, frame_target)
+    ret, frame = cap.read()
+    cap.release()
+
+    if not ret:
+        raise RuntimeError(f"No se pudo leer frame:  {frame_target}")
+
+    # Mostrar ambas versiones
+    frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+    frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+    axs[0].imshow(frame_rgb)
+    axs[0].set_title(f"Frame {frame_target} – Color")
+    axs[0].axis("off")
+
+    axs[1].imshow(frame_gray, cmap="gray")
+    axs[1].set_title(f"Frame {frame_target} – Gris")
+    axs[1].axis("off")
+    plt.tight_layout()
+    plt.show()
+
+    return frame_gray if to_gray else frame
 
 
 def show_n_frames(video_path, n):
@@ -54,12 +94,12 @@ def show_n_frames(video_path, n):
         frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
 
         axes[0].imshow(frame_rgb)
-        axes[0].set_title(f'Frame {i + 1} - Color')
-        axes[0].axis('off')
+        axes[0].set_title(f"Frame {i + 1} - Color")
+        axes[0].axis("off")
 
-        axes[1].imshow(frame_gris, cmap='gray')
-        axes[1].set_title(f'Frame {i + 1} - Escala de Grises')
-        axes[1].axis('off')
+        axes[1].imshow(frame_gris, cmap="gray")
+        axes[1].set_title(f"Frame {i + 1} - Escala de Grises")
+        axes[1].axis("off")
 
         plt.tight_layout()
         plt.show()
@@ -106,10 +146,10 @@ def show_video(video_path):
         frame_resized = cv.resize(frame, (new_width, new_height))
 
         # Mostrar frame
-        cv.imshow('Video', frame_resized)
+        cv.imshow("Video", frame_resized)
 
         # Salir con la tecla 'q'
-        if cv.waitKey(delay) & 0xFF == ord('q'):
+        if cv.waitKey(delay) & 0xFF == ord("q"):
             break
 
     # Liberar recursos
@@ -191,7 +231,7 @@ def process_video(video_path):
         fm = measure_image_quality_fm_metric(frame_gray)
 
         # Guardar métricas y frame
-        fm_values.append({'frame': frame_idx, 'fm': fm})
+        fm_values.append({"frame": frame_idx, "fm": fm})
         frames_processed.append(frame)
 
         frame_idx += 1
@@ -226,10 +266,10 @@ def export_and_plot_fm(fm_values, csv_output, roi=None):
 
     # Graficar los valores FM
     plt.figure(figsize=(10, 4))
-    plt.plot(df_fm['frame'], df_fm['fm'], label='FM por Frame')
-    plt.xlabel('Frame')
-    plt.ylabel('Métrica FM')
-    plt.title('Medida de Nitidez en el Dominio de Frecuencia (FM)')
+    plt.plot(df_fm["frame"], df_fm["fm"], label="FM por Frame")
+    plt.xlabel("Frame")
+    plt.ylabel("Métrica FM")
+    plt.title("Medida de Nitidez en el Dominio de Frecuencia (FM)")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -240,19 +280,25 @@ def export_and_plot_fm(fm_values, csv_output, roi=None):
 
 def show_extreme_frames(fm_values, frames_processed, n=3):
     df_fm = pd.DataFrame(fm_values)
-    df_sorted_asc = df_fm.sort_values('fm', ascending=True).reset_index(drop=True)
-    df_sorted_desc = df_fm.sort_values('fm', ascending=False).reset_index(drop=True)
+    df_sorted_asc = df_fm.sort_values("fm", ascending=True).reset_index(drop=True)
+    df_sorted_desc = df_fm.sort_values("fm", ascending=False).reset_index(drop=True)
 
-    low_indices = df_sorted_asc.loc[:n-1, 'frame'].values
-    high_indices = df_sorted_desc.loc[:n-1, 'frame'].values
+    low_indices = df_sorted_asc.loc[: n - 1, "frame"].values
+    high_indices = df_sorted_desc.loc[: n - 1, "frame"].values
 
     print(f"Mostrando los {n} frames con menor FM:")
     for i, idx in enumerate(low_indices):
-        show_image(frames_processed[idx], f'FM Bajo #{i+1} - Frame {idx} - FM={df_fm.loc[df_fm["frame"] == idx, "fm"].values[0]:.5f}')
+        show_image(
+            frames_processed[idx],
+            f'FM Bajo #{i+1} - Frame {idx} - FM={df_fm.loc[df_fm["frame"] == idx, "fm"].values[0]:.5f}',
+        )
 
     print(f"Mostrando los {n} frames con mayor FM:")
     for i, idx in enumerate(high_indices):
-        show_image(frames_processed[idx], f'FM Alto #{i+1} - Frame {idx} - FM={df_fm.loc[df_fm["frame"] == idx, "fm"].values[0]:.5f}')
+        show_image(
+            frames_processed[idx],
+            f'FM Alto #{i+1} - Frame {idx} - FM={df_fm.loc[df_fm["frame"] == idx, "fm"].values[0]:.5f}',
+        )
 
 
 def process_video_with_roi(video_path, roi_pct=1.0):
@@ -300,17 +346,65 @@ def process_video_with_roi(video_path, roi_pct=1.0):
             roi_h = int(h * roi_pct)
             x1 = (w - roi_w) // 2
             y1 = (h - roi_h) // 2
-            roi = frame_gray[y1:y1 + roi_h, x1:x1 + roi_w]
+            roi = frame_gray[y1 : y1 + roi_h, x1 : x1 + roi_w]
         else:
             roi = frame_gray
 
         # Calcular métrica FM solo sobre ROI
         fm = measure_image_quality_fm_metric(roi)
 
-        fm_values.append({'frame': frame_idx, 'fm': fm})
+        fm_values.append({"frame": frame_idx, "fm": fm})
         frames_processed.append(frame)
 
         frame_idx += 1
 
     captura_video.release()
     return fm_values, frames_processed
+
+
+def measure_grid_focus_map(
+    image: np.ndarray,
+    n_rows: int,
+    n_cols: int,
+    *,
+    threshold_factor: float = 1000.0,
+) -> np.ndarray:
+    """
+    Calcula la métrica FM en una rejilla regular de N×M sobre una imagen en escala de grises.
+    Parámetros
+    ----------
+    image : np.ndarray  # shape (H, W), dtype cualquiera
+        Imagen en escala de grises.
+    n_rows, n_cols : int
+        Dimensiones de la rejilla (deben ser > 0).
+    threshold_factor : float, opcional
+        Factor divisor global usado dentro de `measure_image_quality_fm_metric`.
+    Devuelve
+    -------
+    np.ndarray de forma (n_rows, n_cols) con dtype float32
+        Valor de FM por celda.
+    """
+
+    if image.ndim != 2:
+        raise ValueError("`image` must be 2-D grayscale")
+
+    H, W = image.shape
+    if n_rows <= 0 or n_cols <= 0:
+        raise ValueError("`n_rows` and `n_cols` must be positive")
+
+    # Edges so every pixel is used exactly once
+    row_edges = np.linspace(0, H, n_rows + 1, dtype=int)
+    col_edges = np.linspace(0, W, n_cols + 1, dtype=int)
+
+    fm_map = np.empty((n_rows, n_cols), dtype=np.float32)
+
+    for i in range(n_rows):
+        y0, y1 = row_edges[i], row_edges[i + 1]
+        for j in range(n_cols):
+            x0, x1 = col_edges[j], col_edges[j + 1]
+            tile = image[y0:y1, x0:x1]
+            fm_map[i, j] = measure_image_quality_fm_metric(
+                tile, threshold_factor=threshold_factor
+            )
+
+    return fm_map
