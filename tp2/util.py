@@ -378,7 +378,6 @@ def measure_grid_focus_map(
     n_rows, n_cols : int
         Dimensiones de la rejilla (deben ser > 0).
     threshold_factor : float, opcional
-        Factor divisor global usado dentro de `measure_image_quality_fm_metric`.
     Devuelve
     -------
     np.ndarray de forma (n_rows, n_cols) con dtype float32
@@ -392,7 +391,6 @@ def measure_grid_focus_map(
     if n_rows <= 0 or n_cols <= 0:
         raise ValueError("`n_rows` and `n_cols` must be positive")
 
-    # Edges so every pixel is used exactly once
     row_edges = np.linspace(0, H, n_rows + 1, dtype=int)
     col_edges = np.linspace(0, W, n_cols + 1, dtype=int)
 
