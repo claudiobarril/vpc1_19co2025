@@ -200,14 +200,31 @@ def process_video(video_path):
     return fm_values, frames_processed
 
 
-def export_and_plot_fm(fm_values, csv_output):
+def export_and_plot_fm(fm_values, csv_output, roi=None):
+    """
+    Exporta los valores de la métrica FM a un archivo CSV y genera una gráfica PNG.
+
+    Parámetros:
+    - fm_values (list of dict): Lista con las métricas FM por frame.
+    - csv_output (str): Ruta del directorio donde se guardarán el CSV y la imagen.
+    - roi (float, opcional): Porcentaje del ROI utilizado en el análisis. Si se proporciona, se añade al nombre de los archivos.
+
+    Archivos generados:
+    - fm_[roi].csv
+    - fm_[roi].png
+    """
     df_fm = pd.DataFrame(fm_values)
-    csv_path = csv_output + "/frecuencia_fm.csv"
-    plot_path = csv_output + "/frecuencia_fm.png"
+
+    # Formatear sufijo según ROI si está presente
+    roi_suffix = f"_roi_{roi:.2f}" if roi is not None else ""
+
+    csv_path = f"{csv_output}/fm{roi_suffix}.csv"
+    plot_path = f"{csv_output}/fm{roi_suffix}.png"
 
     df_fm.to_csv(csv_path, index=False)
     print(f"CSV exportado a: {csv_path}")
 
+    # Graficar los valores FM
     plt.figure(figsize=(10, 4))
     plt.plot(df_fm['frame'], df_fm['fm'], label='FM por Frame')
     plt.xlabel('Frame')
@@ -236,3 +253,64 @@ def show_extreme_frames(fm_values, frames_processed, n=3):
     print(f"Mostrando los {n} frames con mayor FM:")
     for i, idx in enumerate(high_indices):
         show_image(frames_processed[idx], f'FM Alto #{i+1} - Frame {idx} - FM={df_fm.loc[df_fm["frame"] == idx, "fm"].values[0]:.5f}')
+
+
+def process_video_with_roi(video_path, roi_pct=1.0):
+    """
+    Procesa un video cuadro a cuadro para calcular la métrica de enfoque (Focus Measure, FM)
+    utilizando una región de interés (ROI) centrada definida por porcentaje del tamaño del frame.
+
+    Parámetros:
+    - video_path (str): Ruta al archivo de video que se desea procesar.
+    - roi_pct (float): Porcentaje (entre 0 y 1) del área del frame que se tomará como ROI centrado.
+                       Por defecto 1.0 (usa el frame completo).
+
+    Retorna:
+    - fm_values (list of dict): Lista con diccionarios que contienen:
+        - 'frame': índice del cuadro
+        - 'fm': valor de la métrica de enfoque para ese cuadro
+    - frames_processed (list of ndarray): Lista de los frames procesados (originales, no grises).
+
+    Ejemplo:
+    ```python
+    fm_vals, frames, t = process_video("mi_video.mp4", roi_pct=0.5)
+    ```
+    """
+
+    captura_video = cv.VideoCapture(video_path)
+    fm_values = []
+    frames_processed = []
+
+    if not captura_video.isOpened():
+        print("Error al abrir el archivo de video")
+        return None, None, None
+
+    frame_idx = 0
+    while True:
+        ret, frame = captura_video.read()
+        if not ret:
+            break
+
+        frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        h, w = frame_gray.shape
+
+        if roi_pct < 1.0:
+            # Definir ROI centrado
+            roi_w = int(w * roi_pct)
+            roi_h = int(h * roi_pct)
+            x1 = (w - roi_w) // 2
+            y1 = (h - roi_h) // 2
+            roi = frame_gray[y1:y1 + roi_h, x1:x1 + roi_w]
+        else:
+            roi = frame_gray
+
+        # Calcular métrica FM solo sobre ROI
+        fm = measure_image_quality_fm_metric(roi)
+
+        fm_values.append({'frame': frame_idx, 'fm': fm})
+        frames_processed.append(frame)
+
+        frame_idx += 1
+
+    captura_video.release()
+    return fm_values, frames_processed
