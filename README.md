@@ -49,7 +49,7 @@ operators in shape from focus.
 El algoritmo de detección a implementar debe detectar y devolver los puntos de máximo enfoque de manera
 automática.
 
-## TP2
+## TP3
 
 - Encontrar el logotipo de la gaseosa dentro de las imágenes provistas en
 tp3/material/images a partir del template tp3/material/template
