@@ -2,6 +2,8 @@ import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
+import time
+from typing import List, Tuple, Dict
 
 
 def show_image(image, title=""):
@@ -158,7 +160,7 @@ def show_video(video_path):
     cv.waitKey(1)
 
 
-def measure_image_quality_fm_metric(image):
+def measure_image_quality_fm_metric(image, threshold_factor=1000):
     """
     Calcula el valor de nitidez FM (Frequency Domain Image Blur Measure)
     basado en el paper "Image Sharpness Measure for Blurred Images in Frequency Domain".
@@ -182,7 +184,7 @@ def measure_image_quality_fm_metric(image):
     M = np.max(AF)
 
     # Paso 5: Umbral (threshold = M / 1000), contar valores mayores al umbral
-    threshold = M / 1000.0
+    threshold = M / threshold_factor
     TH = np.sum(AF > threshold)
 
     # Paso 6: Calcular FM como TH dividido por el número total de píxeles
@@ -240,7 +242,7 @@ def process_video(video_path):
     return fm_values, frames_processed
 
 
-def export_and_plot_fm(fm_values, csv_output, roi=None):
+def export_and_plot_fm(fm_values, csv_output, roi=None, grid=None):
     """
     Exporta los valores de la métrica FM a un archivo CSV y genera una gráfica PNG.
 
@@ -264,15 +266,32 @@ def export_and_plot_fm(fm_values, csv_output, roi=None):
     df_fm.to_csv(csv_path, index=False)
     print(f"CSV exportado a: {csv_path}")
 
+    # Calcular el FM maximo:
+    idx_max = df_fm["fm"].idxmax()
+    max_frame = df_fm.loc[idx_max, "frame"]
+    max_value = df_fm.loc[idx_max, "fm"]
+
     # Graficar los valores FM
     plt.figure(figsize=(10, 4))
+    plt.axvline(max_frame, linestyle="--", label=f"Frame máximo ({max_frame})")
+    plt.scatter([max_frame], [max_value], marker="o", s=50)
+    plt.annotate(
+        f"{max_value:.2f}",
+        xy=(max_frame, max_value),
+        xytext=(max_frame, max_value * 1.05),
+        arrowprops=dict(arrowstyle="->", lw=0.8),
+    )
     plt.plot(df_fm["frame"], df_fm["fm"], label="FM por Frame")
     plt.xlabel("Frame")
     plt.ylabel("Métrica FM")
-    plt.title("Medida de Nitidez en el Dominio de Frecuencia (FM)")
+    title = "Medida de Nitidez en el Dominio de Frecuencia (FM)"
+    if grid is not None:
+        title += f" — Matrix de enfoque {grid[0]}×{grid[1]}"
+    plt.title(title)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
+    plt.ylim(df_fm["fm"].min(), max_value * 1.1)
     plt.savefig(plot_path)
     print(f"Gráfico guardado como: {plot_path}")
     plt.show()
@@ -406,3 +425,63 @@ def measure_grid_focus_map(
             )
 
     return fm_map
+
+
+def process_video_grid(
+    video_path: str,
+    n_rows: int,
+    n_cols: int,
+    *,
+    threshold_factor: float = 1000.0,
+    agg: str = "mean",
+):
+    captura = cv.VideoCapture(video_path)
+    if not captura.isOpened():
+        raise RuntimeError(f"No se pudo abrir {video_path!r}")
+
+    fm_values = []
+    frames = []
+    idx = 0
+    while True:
+        ret, frame = captura.read()
+        if not ret:
+            break
+        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+
+        fm_map = measure_grid_focus_map(
+            gray, n_rows, n_cols, threshold_factor=threshold_factor
+        )
+
+        if agg == "mean":
+            fm_agg = float(fm_map.mean())
+        else:
+            fm_agg = float(fm_map.max())
+
+        fm_values.append({"frame": idx, "fm": fm_agg})
+        frames.append(frame)
+        idx += 1
+
+    captura.release()
+    return fm_values, frames
+
+
+def benchmark_grid_configs(
+    video_path: str,
+    grid_configs: List[Tuple[int, int]],
+    n_runs: int = 5,
+    threshold_factor: float = 1000.0,
+    agg: str = "mean",
+) -> Dict[Tuple[int, int], float]:
+    results: Dict[Tuple[int, int], float] = {}
+    for rows, cols in grid_configs:
+        elapsed_total = 0.0
+        for _ in range(n_runs):
+            start = time.perf_counter()
+            process_video_grid(
+                video_path, rows, cols, threshold_factor=threshold_factor, agg=agg
+            )
+            end = time.perf_counter()
+            elapsed_total += end - start
+        avg_time = elapsed_total / n_runs
+        results[(rows, cols)] = avg_time
+    return results
