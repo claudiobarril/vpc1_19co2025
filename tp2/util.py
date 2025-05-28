@@ -222,7 +222,7 @@ def measure_image_quality_lap2(image):
     return focus_measure
 
 
-def process_video(video_path, algorithm=measure_image_quality_fm_metric):
+def process_video(video_path, algorithm=measure_image_quality_fm_metric, use_unsharp_mask=False, return_gray_frame=False):
     """
     Procesa un video cuadro a cuadro para calcular la métrica de enfoque (Focus Measure, FM)
     utilizando el algorítmo pasado por parámetro.
@@ -258,12 +258,19 @@ def process_video(video_path, algorithm=measure_image_quality_fm_metric):
         # Conversión a escala de grises sin redimensionar
         frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
+        if use_unsharp_mask:
+            frame_gray = apply_unsharp_mask(frame_gray)
+
         # Calcular métrica de enfoque
         fm = algorithm(frame_gray)
 
         # Guardar métricas y frame
         fm_values.append({"frame": frame_idx, "fm": fm})
-        frames_processed.append(frame)
+
+        if return_gray_frame:
+            frames_processed.append(frame_gray)
+        else:
+            frames_processed.append(frame)
 
         frame_idx += 1
 
@@ -271,7 +278,7 @@ def process_video(video_path, algorithm=measure_image_quality_fm_metric):
     return fm_values, frames_processed
 
 
-def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None):
+def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None, unsharp_mask=None):
     """
     Exporta los valores de la métrica FM a un archivo CSV y genera una gráfica PNG.
 
@@ -288,9 +295,10 @@ def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None):
 
     # Formatear sufijo según ROI si está presente
     roi_suffix = f"_roi_{roi:.2f}" if roi is not None else ""
+    unsharp_mask_suffix = f"{roi_suffix}_unsharp_mask" if unsharp_mask is not None else ""
 
-    csv_path = f"{csv_output}/fm{roi_suffix}.csv"
-    plot_path = f"{csv_output}/fm{roi_suffix}.png"
+    csv_path = f"{csv_output}/fm{unsharp_mask_suffix}.csv"
+    plot_path = f"{csv_output}/fm{unsharp_mask_suffix}.png"
 
     df_fm.to_csv(csv_path, index=False)
     print(f"CSV exportado a: {csv_path}")
@@ -514,3 +522,21 @@ def benchmark_grid_configs(
         avg_time = elapsed_total / n_runs
         results[(rows, cols)] = avg_time
     return results
+
+
+def apply_unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.5):
+    """
+    Aplica unsharp masking a una imagen en escala de grises.
+
+    Parámetros:
+    - image: np.ndarray (2D), imagen en escala de grises.
+    - kernel_size: tamaño del filtro gaussiano.
+    - sigma: desviación estándar del Gaussiano.
+    - amount: factor de realce.
+
+    Retorna:
+    - sharpened image (np.ndarray)
+    """
+    blurred = cv.GaussianBlur(image, kernel_size, sigma)
+    sharpened = cv.addWeighted(image, 1 + amount, blurred, -amount, 0)
+    return sharpened
