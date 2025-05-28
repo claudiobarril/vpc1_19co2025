@@ -524,7 +524,7 @@ def benchmark_grid_configs(
     return results
 
 
-def apply_unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.5):
+def apply_unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=5):
     """
     Aplica unsharp masking a una imagen en escala de grises.
 
