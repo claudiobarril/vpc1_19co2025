@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import time
 from typing import List, Tuple, Dict
+from scipy.ndimage import convolve
 
 
 def show_image(image, title=""):
@@ -193,10 +194,38 @@ def measure_image_quality_fm_metric(image, threshold_factor=1000):
     return FM
 
 
-def process_video(video_path):
+def measure_image_quality_lap2(image):
+    """
+    Calcula la nitidez de una imagen usando el operador Modified Laplacian (LAP2)
+    según el paper 'Analysis of Focus Measure Operators for Shape-from-Focus'.
+
+    Parámetro:
+        image (np.ndarray): Imagen en escala de grises (2D)
+
+    Retorna:
+        float: Medida de nitidez basada en LAP2
+    """
+    # Definición de los kernels (máscaras)
+    kernel_x = np.array([[-1, 2, -1]])
+    kernel_y = kernel_x.T  # transpuesta
+
+    # Aplicar convoluciones
+    lap_x = convolve(image.astype(np.float32), kernel_x)
+    lap_y = convolve(image.astype(np.float32), kernel_y)
+
+    # Medida de enfoque: suma de las respuestas absolutas
+    focus_map = np.abs(lap_x) + np.abs(lap_y)
+
+    # Valor final: promedio del mapa de enfoque
+    focus_measure = np.mean(focus_map)
+
+    return focus_measure
+
+
+def process_video(video_path, algorithm=measure_image_quality_fm_metric):
     """
     Procesa un video cuadro a cuadro para calcular la métrica de enfoque (Focus Measure, FM)
-    utilizando measure_image_quality_fm_metric.
+    utilizando el algorítmo pasado por parámetro.
 
     Parámetros:
     - video_path (str): Ruta al archivo de video que se desea procesar.
@@ -230,7 +259,7 @@ def process_video(video_path):
         frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
         # Calcular métrica de enfoque
-        fm = measure_image_quality_fm_metric(frame_gray)
+        fm = algorithm(frame_gray)
 
         # Guardar métricas y frame
         fm_values.append({"frame": frame_idx, "fm": fm})
@@ -242,7 +271,7 @@ def process_video(video_path):
     return fm_values, frames_processed
 
 
-def export_and_plot_fm(fm_values, csv_output, roi=None, grid=None):
+def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None):
     """
     Exporta los valores de la métrica FM a un archivo CSV y genera una gráfica PNG.
 
@@ -284,7 +313,7 @@ def export_and_plot_fm(fm_values, csv_output, roi=None, grid=None):
     plt.plot(df_fm["frame"], df_fm["fm"], label="FM por Frame")
     plt.xlabel("Frame")
     plt.ylabel("Métrica FM")
-    title = "Medida de Nitidez en el Dominio de Frecuencia (FM)"
+    title = plot_title
     if grid is not None:
         title += f" — Matrix de enfoque {grid[0]}×{grid[1]}"
     plt.title(title)
@@ -320,7 +349,7 @@ def show_extreme_frames(fm_values, frames_processed, n=3):
         )
 
 
-def process_video_with_roi(video_path, roi_pct=1.0):
+def process_video_with_roi(video_path, roi_pct=1.0, algorithm=measure_image_quality_fm_metric):
     """
     Procesa un video cuadro a cuadro para calcular la métrica de enfoque (Focus Measure, FM)
     utilizando una región de interés (ROI) centrada definida por porcentaje del tamaño del frame.
@@ -370,7 +399,7 @@ def process_video_with_roi(video_path, roi_pct=1.0):
             roi = frame_gray
 
         # Calcular métrica FM solo sobre ROI
-        fm = measure_image_quality_fm_metric(roi)
+        fm = algorithm(roi)
 
         fm_values.append({"frame": frame_idx, "fm": fm})
         frames_processed.append(frame)
