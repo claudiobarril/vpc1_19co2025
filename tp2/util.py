@@ -286,6 +286,8 @@ def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None, u
     - fm_values (list of dict): Lista con las métricas FM por frame.
     - csv_output (str): Ruta del directorio donde se guardarán el CSV y la imagen.
     - roi (float, opcional): Porcentaje del ROI utilizado en el análisis. Si se proporciona, se añade al nombre de los archivos.
+    - grid (tuple, opcional): Dimensiones de la grilla (filas, columnas).
+    - unsharp_mask (bool, opcional): Indica si se aplicó unsharp mask.
 
     Archivos generados:
     - fm_[roi].csv
@@ -295,7 +297,7 @@ def export_and_plot_fm(fm_values, csv_output, plot_title, roi=None, grid=None, u
 
     # Formatear sufijo según ROI si está presente
     roi_suffix = f"_roi_{roi:.2f}" if roi is not None else ""
-    unsharp_mask_suffix = f"{roi_suffix}_unsharp_mask" if unsharp_mask is not None else ""
+    unsharp_mask_suffix = f"{roi_suffix}_unsharp_mask" if unsharp_mask is not None else roi_suffix
 
     csv_path = f"{csv_output}/fm{unsharp_mask_suffix}.csv"
     plot_path = f"{csv_output}/fm{unsharp_mask_suffix}.png"
