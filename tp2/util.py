@@ -420,50 +420,63 @@ def process_video_with_roi(video_path, roi_pct=1.0, algorithm=measure_image_qual
     return fm_values, frames_processed
 
 
-def measure_grid_focus_map(
-    image: np.ndarray,
-    n_rows: int,
-    n_cols: int,
-    *,
-    threshold_factor: float = 1000.0,
-) -> np.ndarray:
+def compute_focus_grid_like_camera(image, N, M, threshold_factor=1000):
     """
-    Calcula la métrica FM en una rejilla regular de N×M sobre una imagen en escala de grises.
-    Parámetros
-    ----------
-    image : np.ndarray  # shape (H, W), dtype cualquiera
-        Imagen en escala de grises.
-    n_rows, n_cols : int
-        Dimensiones de la rejilla (deben ser > 0).
-    threshold_factor : float, opcional
-    Devuelve
-    -------
-    np.ndarray de forma (n_rows, n_cols) con dtype float32
-        Valor de FM por celda.
+    Calcula la métrica de enfoque FM en una grilla NxM tipo autofoco de cámara,
+    cumpliendo restricciones geométricas.
+
+    Parámetros:
+        image (np.ndarray): Frame en escala de grises.
+        N (int): Filas de la grilla (entre 3 y 9).
+        M (int): Columnas de la grilla (entre 3 y 9).
+        threshold_factor (float): Umbral para la métrica FM.
+
+    Retorna:
+        np.ndarray: Matriz NxM con valores FM por región.
     """
+    if not (3 <= N <= 9 and 3 <= M <= 9):
+        raise ValueError("N y M deben estar entre 3 y 9 inclusive")
 
-    if image.ndim != 2:
-        raise ValueError("`image` must be 2-D grayscale")
+    h, w = image.shape
 
-    H, W = image.shape
-    if n_rows <= 0 or n_cols <= 0:
-        raise ValueError("`n_rows` and `n_cols` must be positive")
+    # Total de bloques incluyendo celdas y espacios (cada espacio = roi_size)
+    total_blocks_y = 2 * N - 1
+    total_blocks_x = 2 * M - 1
 
-    row_edges = np.linspace(0, H, n_rows + 1, dtype=int)
-    col_edges = np.linspace(0, W, n_cols + 1, dtype=int)
+    # Buscar el tamaño máximo posible de celda que cumpla con el 25%-75% del tamaño del frame
+    max_roi_h = h * 0.75 / total_blocks_y
+    min_roi_h = h * 0.25 / total_blocks_y
+    max_roi_w = w * 0.75 / total_blocks_x
+    min_roi_w = w * 0.25 / total_blocks_x
 
-    fm_map = np.empty((n_rows, n_cols), dtype=np.float32)
+    # El roi_size debe ser cuadrado y cumplir ambas restricciones
+    roi_size = int(min(max_roi_h, max_roi_w))
+    min_allowed = int(max(min_roi_h, min_roi_w))
 
-    for i in range(n_rows):
-        y0, y1 = row_edges[i], row_edges[i + 1]
-        for j in range(n_cols):
-            x0, x1 = col_edges[j], col_edges[j + 1]
-            tile = image[y0:y1, x0:x1]
-            fm_map[i, j] = measure_image_quality_fm_metric(
-                tile, threshold_factor=threshold_factor
-            )
+    if roi_size < min_allowed:
+        raise ValueError("No se puede construir una grilla válida con las restricciones dadas")
 
-    return fm_map
+    fm_matrix = np.zeros((N, M), dtype=np.float32)
+
+    # Calcular tamaño total usado por la grilla
+    grid_height = roi_size * total_blocks_y
+    grid_width = roi_size * total_blocks_x
+
+    # Coordenadas de origen para centrar la grilla en el frame
+    top_margin = (h - grid_height) // 2
+    left_margin = (w - grid_width) // 2
+
+    for i in range(N):
+        for j in range(M):
+            y0 = top_margin + i * roi_size * 2
+            x0 = left_margin + j * roi_size * 2
+            y1 = y0 + roi_size
+            x1 = x0 + roi_size
+
+            roi = image[y0:y1, x0:x1]
+            fm_matrix[i, j] = measure_image_quality_fm_metric(roi, threshold_factor)
+
+    return fm_matrix
 
 
 def process_video_grid(
@@ -471,8 +484,7 @@ def process_video_grid(
     n_rows: int,
     n_cols: int,
     *,
-    threshold_factor: float = 1000.0,
-    agg: str = "mean",
+    threshold_factor: int = 1000,
 ):
     captura = cv.VideoCapture(video_path)
     if not captura.isOpened():
@@ -487,14 +499,11 @@ def process_video_grid(
             break
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-        fm_map = measure_grid_focus_map(
+        fm_map = compute_focus_grid_like_camera(
             gray, n_rows, n_cols, threshold_factor=threshold_factor
         )
 
-        if agg == "mean":
-            fm_agg = float(fm_map.mean())
-        else:
-            fm_agg = float(fm_map.max())
+        fm_agg = float(fm_map.mean())
 
         fm_values.append({"frame": idx, "fm": fm_agg})
         frames.append(frame)
@@ -508,8 +517,7 @@ def benchmark_grid_configs(
     video_path: str,
     grid_configs: List[Tuple[int, int]],
     n_runs: int = 5,
-    threshold_factor: float = 1000.0,
-    agg: str = "mean",
+    threshold_factor: int = 1000,
 ) -> Dict[Tuple[int, int], float]:
     results: Dict[Tuple[int, int], float] = {}
     for rows, cols in grid_configs:
@@ -517,7 +525,7 @@ def benchmark_grid_configs(
         for _ in range(n_runs):
             start = time.perf_counter()
             process_video_grid(
-                video_path, rows, cols, threshold_factor=threshold_factor, agg=agg
+                video_path, rows, cols, threshold_factor=threshold_factor
             )
             end = time.perf_counter()
             elapsed_total += end - start
